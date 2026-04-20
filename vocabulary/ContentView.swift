@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct ContentView: View {
+struct LegacyContentView: View {
     var body: some View {
         VStack {
             Image(systemName: "swift")
@@ -15,5 +15,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    LegacyContentView()
 }

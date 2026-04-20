@@ -8,77 +8,120 @@
 import WidgetKit
 import SwiftUI
 
+private enum WidgetConstants {
+    static let appGroupId = "group.com.vocabulary.shared"
+    static let snapshotKey = "widgetSnapshotV1"
+    static let kind = "dailyVocabulary"
+}
+
+enum DailyState: String, Codable {
+    case pending
+    case seen
+    case learned
+}
+
+struct WidgetSnapshot: Codable, Hashable {
+    let day: Date
+    let wordId: Int
+    let en: String
+    let fr: String
+    let level: String
+    let state: DailyState
+}
+
 struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> SimpleEntry {
-        SimpleEntry(date: Date(), emoji: "😀")
+        SimpleEntry(date: Date(), snapshot: WidgetSnapshot(day: Date(), wordId: 1, en: "hello", fr: "bonjour", level: "A1", state: .pending))
     }
 
     func getSnapshot(in context: Context, completion: @escaping (SimpleEntry) -> ()) {
-        let entry = SimpleEntry(date: Date(), emoji: "😀")
-        completion(entry)
+        completion(SimpleEntry(date: Date(), snapshot: loadSnapshot()))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> ()) {
-        var entries: [SimpleEntry] = []
+        let now = Date()
+        let entry = SimpleEntry(date: now, snapshot: loadSnapshot())
+        let nextMidnight = Calendar.autoupdatingCurrent.nextDate(
+            after: now,
+            matching: DateComponents(hour: 0, minute: 0),
+            matchingPolicy: .nextTime
+        ) ?? Calendar.autoupdatingCurrent.date(byAdding: .day, value: 1, to: now)!
 
-        // Generate a timeline consisting of five entries an hour apart, starting from the current date.
-        let currentDate = Date()
-        for hourOffset in 0 ..< 5 {
-            let entryDate = Calendar.current.date(byAdding: .hour, value: hourOffset, to: currentDate)!
-            let entry = SimpleEntry(date: entryDate, emoji: "😀")
-            entries.append(entry)
-        }
-
-        let timeline = Timeline(entries: entries, policy: .atEnd)
-        completion(timeline)
+        completion(Timeline(entries: [entry], policy: .after(nextMidnight)))
     }
 
-//    func relevances() async -> WidgetRelevances<Void> {
-//        // Generate a list containing the contexts this widget is relevant in.
-//    }
+    private func loadSnapshot() -> WidgetSnapshot? {
+        let defaults = UserDefaults(suiteName: WidgetConstants.appGroupId) ?? .standard
+        guard let data = defaults.data(forKey: WidgetConstants.snapshotKey) else { return nil }
+        return try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
+    }
 }
 
 struct SimpleEntry: TimelineEntry {
     let date: Date
-    let emoji: String
+    let snapshot: WidgetSnapshot?
 }
 
 struct dailyVocabularyEntryView : View {
     var entry: Provider.Entry
 
     var body: some View {
-        VStack {
-            Text("Time:")
-            Text(entry.date, style: .time)
+        VStack(alignment: .leading, spacing: 8) {
+            if let snapshot = entry.snapshot {
+                HStack {
+                    Text("Mot du jour")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(snapshot.level)
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.thinMaterial, in: Capsule())
+                }
 
-            Text("Emoji:")
-            Text(entry.emoji)
+                Text(snapshot.en)
+                    .font(.headline)
+                    .lineLimit(2)
+
+                Text(snapshot.fr)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            } else {
+                Text("Ouvre l’app")
+                    .font(.headline)
+                Text("Choisis ton niveau pour recevoir ton mot du jour.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
         }
     }
 }
 
 struct dailyVocabulary: Widget {
-    let kind: String = "dailyVocabulary"
-
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: Provider()) { entry in
+        StaticConfiguration(kind: WidgetConstants.kind, provider: Provider()) { entry in
             if #available(iOS 17.0, *) {
                 dailyVocabularyEntryView(entry: entry)
+                    .widgetURL(URL(string: "vocabulary://home"))
                     .containerBackground(.fill.tertiary, for: .widget)
             } else {
                 dailyVocabularyEntryView(entry: entry)
+                    .widgetURL(URL(string: "vocabulary://home"))
                     .padding()
                     .background()
             }
         }
-        .configurationDisplayName("My Widget")
-        .description("This is an example widget.")
+        .configurationDisplayName("Mot du jour")
+        .description("Affiche ton mot du jour (anglais + français).")
+        .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
 
 #Preview(as: .systemSmall) {
     dailyVocabulary()
 } timeline: {
-    SimpleEntry(date: .now, emoji: "😀")
-    SimpleEntry(date: .now, emoji: "🤩")
+    SimpleEntry(date: .now, snapshot: WidgetSnapshot(day: .now, wordId: 1, en: "hello", fr: "bonjour", level: "A1", state: .pending))
 }
