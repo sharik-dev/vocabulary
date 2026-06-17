@@ -18,6 +18,7 @@ enum AppConstants {
 
     enum WidgetKey {
         static let snapshot = "widgetSnapshotV1"
+        static let hourlyWords = "hourlyWordsV1"
     }
 
     enum NotificationId {

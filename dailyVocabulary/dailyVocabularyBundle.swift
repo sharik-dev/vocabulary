@@ -12,6 +12,7 @@ import SwiftUI
 struct dailyVocabularyBundle: WidgetBundle {
     var body: some Widget {
         dailyVocabulary()
+        hourlyVocabulary()
         dailyVocabularyLiveActivity()
     }
 }

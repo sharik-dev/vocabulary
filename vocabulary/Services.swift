@@ -129,6 +129,7 @@ enum DailyWordService {
 
         settings.setNextIndex(cursor, for: level)
         updateWidgetSnapshotIfPossible(level: level, wordStore: wordStore, context: context)
+        updateHourlyWords(level: level, wordStore: wordStore)
     }
 
     static func markSeen(entry: DailyEntryModel, level: CEFRLevel, wordStore: WordStore, context: ModelContext) {
@@ -268,6 +269,39 @@ enum DailyWordService {
             }
             context.insert(progress)
         }
+    }
+
+    static func updateHourlyWords(level: CEFRLevel, wordStore: WordStore) {
+        let words = wordStore.words(for: level)
+        guard !words.isEmpty else { return }
+
+        let today = Date().startOfDay
+        let cal = Calendar.autoupdatingCurrent
+        let dayNumber = Int(today.timeIntervalSince1970 / 86400)
+        let seed = UInt64(bitPattern: Int64(dayNumber) &* 0x9E3779B97F4A7C15) ^ UInt64(level.sortOrder &* 17)
+        var rng = SeededGenerator(seed: seed)
+        var shuffled = words
+        shuffled.shuffle(using: &rng)
+
+        var snapshots: [HourlyWordSnapshot] = []
+        for hour in 0..<24 {
+            let word = shuffled[hour % shuffled.count]
+            if let hourDate = cal.date(byAdding: .hour, value: hour, to: today) {
+                snapshots.append(HourlyWordSnapshot(
+                    wordId: word.id,
+                    en: word.en,
+                    fr: word.fr,
+                    level: level.rawValue,
+                    validFrom: hourDate
+                ))
+            }
+        }
+
+        let defaults = UserDefaults(suiteName: AppConstants.appGroupId) ?? .standard
+        if let data = try? JSONEncoder().encode(snapshots) {
+            defaults.set(data, forKey: AppConstants.WidgetKey.hourlyWords)
+        }
+        WidgetCenter.shared.reloadTimelines(ofKind: "hourlyVocabulary")
     }
 
     private static func updateWidgetSnapshotIfPossible(level: CEFRLevel, wordStore: WordStore, context: ModelContext) {

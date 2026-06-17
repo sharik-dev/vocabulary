@@ -48,6 +48,14 @@ struct WidgetSnapshot: Codable, Hashable {
     let state: DailyState
 }
 
+struct HourlyWordSnapshot: Codable, Hashable {
+    let wordId: Int
+    let en: String
+    let fr: String
+    let level: String
+    let validFrom: Date
+}
+
 extension Date {
     var startOfDay: Date {
         Calendar.autoupdatingCurrent.startOfDay(for: self)
