@@ -1,8 +1,9 @@
 import Foundation
 
 enum AppConstants {
-    // IMPORTANT: Set the same App Group id on both the app target and the widget target in Xcode.
-    static let appGroupId = "group.com.vocabulary.shared"
+    // IMPORTANT: Must match the App Group declared in BOTH targets' entitlements
+    // (vocabulary.entitlements & dailyVocabularyExtension.entitlements).
+    static let appGroupId = "group.vocabularyBySharik"
 
     enum DefaultsKey {
         static let onboardingCompleted = "onboardingCompleted"

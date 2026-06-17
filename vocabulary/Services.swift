@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 import SwiftUI
 import UserNotifications
 import WidgetKit
@@ -49,17 +48,9 @@ final class WordStore: ObservableObject {
         }
     }
 
-    func word(id: Int) -> Word? {
-        wordsById[id]
-    }
-
-    func words(for level: CEFRLevel) -> [Word] {
-        wordsByLevel[level] ?? []
-    }
-
-    func totalCount(for level: CEFRLevel) -> Int {
-        wordsByLevel[level]?.count ?? 0
-    }
+    func word(id: Int) -> Word? { wordsById[id] }
+    func words(for level: CEFRLevel) -> [Word] { wordsByLevel[level] ?? [] }
+    func totalCount(for level: CEFRLevel) -> Int { wordsByLevel[level]?.count ?? 0 }
 }
 
 struct SeededGenerator: RandomNumberGenerator {
@@ -77,10 +68,10 @@ struct SeededGenerator: RandomNumberGenerator {
 
 @MainActor
 enum DailyWordService {
-    static func syncUpToToday(level: CEFRLevel, wordStore: WordStore, settings: SettingsStore, context: ModelContext) {
+    static func syncUpToToday(level: CEFRLevel, wordStore: WordStore, settings: SettingsStore, store: EntryStore) {
         let today = Date().startOfDay
 
-        let lastEntry = fetchLastEntry(level: level, context: context)
+        let lastEntry = store.lastEntry(level: level)
         let startDay: Date = {
             guard let lastEntry else { return today }
             guard let next = Calendar.autoupdatingCurrent.date(byAdding: .day, value: 1, to: lastEntry.day.startOfDay) else {
@@ -91,16 +82,12 @@ enum DailyWordService {
 
         let daysToGenerate = daysBetweenInclusive(from: startDay, to: today)
         guard !daysToGenerate.isEmpty else {
-            updateWidgetSnapshotIfPossible(level: level, wordStore: wordStore, context: context)
+            updateWidgetSnapshotIfPossible(level: level, wordStore: wordStore, store: store)
             return
         }
 
-        let alreadyAssignedIds = Set(fetchEntries(level: level, context: context).map(\.wordId))
-        var assignedIds = alreadyAssignedIds
-
-        let learnedIds = Set(fetchWordProgress(level: level, context: context)
-            .filter { $0.state == .learned }
-            .map(\.wordId))
+        var assignedIds = Set(store.entries(level: level).map(\.wordId))
+        let learnedIds = store.learnedWordIds(level: level)
 
         var orderedIds = wordStore.words(for: level).map(\.id)
         var rng = SeededGenerator(seed: settings.shuffleSeed ^ UInt64(level.sortOrder &* 0x9E3779B9))
@@ -109,9 +96,7 @@ enum DailyWordService {
         var cursor = settings.nextIndex(for: level)
 
         for day in daysToGenerate {
-            if fetchEntry(day: day, level: level, context: context) != nil {
-                continue
-            }
+            if store.entry(day: day, level: level) != nil { continue }
 
             guard let nextWordId = pickNextWordId(
                 orderedIds: orderedIds,
@@ -123,90 +108,61 @@ enum DailyWordService {
             }
 
             assignedIds.insert(nextWordId)
-            let entry = DailyEntryModel(day: day, wordId: nextWordId, level: level, state: .pending)
-            context.insert(entry)
+            store.insertEntry(DailyEntryModel(day: day, wordId: nextWordId, level: level, state: .pending))
         }
 
         settings.setNextIndex(cursor, for: level)
-        updateWidgetSnapshotIfPossible(level: level, wordStore: wordStore, context: context)
+        updateWidgetSnapshotIfPossible(level: level, wordStore: wordStore, store: store)
         updateHourlyWords(level: level, wordStore: wordStore)
     }
 
-    static func markSeen(entry: DailyEntryModel, level: CEFRLevel, wordStore: WordStore, context: ModelContext) {
-        guard entry.state == .pending else {
-            updateWidgetSnapshotIfPossible(level: level, wordStore: wordStore, context: context)
-            return
+    static func markSeen(entry: DailyEntryModel, level: CEFRLevel, wordStore: WordStore, store: EntryStore) {
+        store.updateEntry(id: entry.id) { e in
+            guard e.state == .pending else { return }
+            e.state = .seen
+            e.revealedAt = e.revealedAt ?? Date()
         }
-
-        entry.state = .seen
-        entry.revealedAt = entry.revealedAt ?? Date()
-        upsertProgress(wordId: entry.wordId, level: level, newState: .seen, context: context)
-        updateWidgetSnapshotIfPossible(level: level, wordStore: wordStore, context: context)
+        upsertProgress(wordId: entry.wordId, level: level, newState: .seen, store: store)
+        updateWidgetSnapshotIfPossible(level: level, wordStore: wordStore, store: store)
     }
 
-    static func markLearned(entry: DailyEntryModel, level: CEFRLevel, wordStore: WordStore, context: ModelContext) {
-        entry.state = .learned
-        entry.revealedAt = entry.revealedAt ?? Date()
-        entry.learnedAt = entry.learnedAt ?? Date()
-        upsertProgress(wordId: entry.wordId, level: level, newState: .learned, context: context)
-        updateWidgetSnapshotIfPossible(level: level, wordStore: wordStore, context: context)
+    static func markLearned(entry: DailyEntryModel, level: CEFRLevel, wordStore: WordStore, store: EntryStore) {
+        store.updateEntry(id: entry.id) { e in
+            e.state = .learned
+            e.revealedAt = e.revealedAt ?? Date()
+            e.learnedAt = e.learnedAt ?? Date()
+        }
+        upsertProgress(wordId: entry.wordId, level: level, newState: .learned, store: store)
+        updateWidgetSnapshotIfPossible(level: level, wordStore: wordStore, store: store)
     }
 
-    static func markReview(entry: DailyEntryModel, level: CEFRLevel, wordStore: WordStore, context: ModelContext) {
-        entry.state = .seen
-        entry.learnedAt = nil
-        upsertProgress(wordId: entry.wordId, level: level, newState: .seen, context: context)
-        updateWidgetSnapshotIfPossible(level: level, wordStore: wordStore, context: context)
+    static func markReview(entry: DailyEntryModel, level: CEFRLevel, wordStore: WordStore, store: EntryStore) {
+        store.updateEntry(id: entry.id) { e in
+            e.state = .seen
+            e.learnedAt = nil
+        }
+        upsertProgress(wordId: entry.wordId, level: level, newState: .seen, store: store)
+        updateWidgetSnapshotIfPossible(level: level, wordStore: wordStore, store: store)
     }
 
-    static func resetProgress(settings: SettingsStore, context: ModelContext) {
-        let entries = (try? context.fetch(FetchDescriptor<DailyEntryModel>())) ?? []
-        for e in entries { context.delete(e) }
-        let progresses = (try? context.fetch(FetchDescriptor<WordProgressModel>())) ?? []
-        for p in progresses { context.delete(p) }
+    /// Mark an arbitrary word (e.g. one browsed via the swipe deck, not the daily
+    /// entry) as seen or learned. Updates the progress store used by the stats.
+    static func setWordState(wordId: Int, level: CEFRLevel, state: WordState, store: EntryStore) {
+        upsertProgress(wordId: wordId, level: level, newState: state, store: store)
+    }
 
+    /// Word ids already learned for a level (used to build the browse deck).
+    static func learnedWordIds(level: CEFRLevel, store: EntryStore) -> Set<Int> {
+        store.learnedWordIds(level: level)
+    }
+
+    static func resetProgress(settings: SettingsStore, store: EntryStore) {
+        store.reset()
         settings.resetProgressPointers()
 
         let defaults = UserDefaults(suiteName: AppConstants.appGroupId) ?? .standard
         defaults.removeObject(forKey: AppConstants.WidgetKey.snapshot)
         WidgetCenter.shared.reloadAllTimelines()
-    }
-
-    private static func fetchEntry(day: Date, level: CEFRLevel, context: ModelContext) -> DailyEntryModel? {
-        let d = day.startOfDay
-        let levelRaw = level.rawValue
-        var descriptor = FetchDescriptor<DailyEntryModel>(
-            predicate: #Predicate { $0.day == d && $0.levelRaw == levelRaw },
-            sortBy: [SortDescriptor(\.day, order: .reverse)]
-        )
-        descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
-    }
-
-    private static func fetchEntries(level: CEFRLevel, context: ModelContext) -> [DailyEntryModel] {
-        let levelRaw = level.rawValue
-        let descriptor = FetchDescriptor<DailyEntryModel>(
-            predicate: #Predicate { $0.levelRaw == levelRaw }
-        )
-        return (try? context.fetch(descriptor)) ?? []
-    }
-
-    private static func fetchLastEntry(level: CEFRLevel, context: ModelContext) -> DailyEntryModel? {
-        let levelRaw = level.rawValue
-        var descriptor = FetchDescriptor<DailyEntryModel>(
-            predicate: #Predicate { $0.levelRaw == levelRaw },
-            sortBy: [SortDescriptor(\.day, order: .reverse)]
-        )
-        descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
-    }
-
-    private static func fetchWordProgress(level: CEFRLevel, context: ModelContext) -> [WordProgressModel] {
-        let levelRaw = level.rawValue
-        let descriptor = FetchDescriptor<WordProgressModel>(
-            predicate: #Predicate { $0.levelRaw == levelRaw }
-        )
-        return (try? context.fetch(descriptor)) ?? []
     }
 
     private static func pickNextWordId(
@@ -241,15 +197,8 @@ enum DailyWordService {
         return out
     }
 
-    private static func upsertProgress(wordId: Int, level: CEFRLevel, newState: WordState, context: ModelContext) {
-        let targetWordId = wordId
-        var descriptor = FetchDescriptor<WordProgressModel>(
-            predicate: #Predicate { $0.wordId == targetWordId }
-        )
-        descriptor.fetchLimit = 1
-        let existing = try? context.fetch(descriptor).first
-
-        if let existing {
+    private static func upsertProgress(wordId: Int, level: CEFRLevel, newState: WordState, store: EntryStore) {
+        if var existing = store.progress(wordId: wordId) {
             switch (existing.state, newState) {
             case (.learned, .seen):
                 existing.state = .seen
@@ -260,14 +209,15 @@ enum DailyWordService {
                 if newState == .learned { existing.learnedAt = existing.learnedAt ?? Date() }
             }
             existing.level = level
+            store.upsertProgress(existing)
         } else {
-            let progress = WordProgressModel(wordId: wordId, level: level, state: newState)
+            var progress = WordProgressModel(wordId: wordId, level: level, state: newState)
             if newState == .seen { progress.firstSeenAt = Date() }
             if newState == .learned {
                 progress.firstSeenAt = Date()
                 progress.learnedAt = Date()
             }
-            context.insert(progress)
+            store.upsertProgress(progress)
         }
     }
 
@@ -304,14 +254,10 @@ enum DailyWordService {
         WidgetCenter.shared.reloadTimelines(ofKind: "hourlyVocabulary")
     }
 
-    private static func updateWidgetSnapshotIfPossible(level: CEFRLevel, wordStore: WordStore, context: ModelContext) {
+    private static func updateWidgetSnapshotIfPossible(level: CEFRLevel, wordStore: WordStore, store: EntryStore) {
         let today = Date().startOfDay
-        guard let entry = fetchEntry(day: today, level: level, context: context) else {
-            return
-        }
-        guard let word = wordStore.word(id: entry.wordId) else {
-            return
-        }
+        guard let entry = store.entry(day: today, level: level) else { return }
+        guard let word = wordStore.word(id: entry.wordId) else { return }
 
         let snapshot = WidgetSnapshot(
             day: today,
@@ -339,24 +285,19 @@ enum ProgressService {
         let total: Int
     }
 
-    static func stats(level: CEFRLevel? = nil, wordStore: WordStore, context: ModelContext) -> Stats {
+    static func stats(level: CEFRLevel? = nil, wordStore: WordStore, store: EntryStore) -> Stats {
         let words: [Word] = {
             if let level { return wordStore.words(for: level) }
             return wordStore.allWords
         }()
 
         let total = words.count
-        guard total > 0 else {
-            return Stats(learned: 0, seen: 0, remaining: 0, total: 0)
-        }
+        guard total > 0 else { return Stats(learned: 0, seen: 0, remaining: 0, total: 0) }
 
         let wordIds = Set(words.map(\.id))
-        let descriptor = FetchDescriptor<WordProgressModel>()
-        let progresses = (try? context.fetch(descriptor)) ?? []
-
         var learned = 0
         var seen = 0
-        for p in progresses where wordIds.contains(p.wordId) {
+        for p in store.progress where wordIds.contains(p.wordId) {
             switch p.state {
             case .learned: learned += 1
             case .seen: seen += 1

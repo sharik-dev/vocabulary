@@ -1,12 +1,52 @@
 import WidgetKit
 import SwiftUI
 
+extension View {
+    /// `containerBackground` is iOS 17+. On iOS 16 the widget view draws its own
+    /// background (our gradient ZStack fills the whole widget), so this is a no-op.
+    @ViewBuilder
+    func widgetClearBackground() -> some View {
+        if #available(iOS 17.0, *) {
+            self.containerBackground(for: .widget) { Color.clear }
+        } else {
+            self
+        }
+    }
+}
+
+extension WidgetConfiguration {
+    /// Make the widget fill the whole block edge-to-edge (iOS 17 adds inner
+    /// content margins; iOS 16 has none, so this is a no-op there).
+    func filledBlock() -> some WidgetConfiguration {
+        if #available(iOS 17.0, *) {
+            return self.contentMarginsDisabled()
+        } else {
+            return self
+        }
+    }
+}
+
 private enum WidgetConstants {
-    static let appGroupId = "group.com.vocabulary.shared"
+    static let appGroupId = "group.vocabularyBySharik"
     static let snapshotKey = "widgetSnapshotV1"
     static let hourlyWordsKey = "hourlyWordsV1"
     static let dailyKind = "dailyVocabulary"
     static let hourlyKind = "hourlyVocabulary"
+}
+
+// Palette shared with the app (editorial warm theme).
+private enum WTheme {
+    static let clay      = Color(red: 0.722, green: 0.361, blue: 0.220) // #B85C38
+    static let clayDeep  = Color(red: 0.541, green: 0.247, blue: 0.133) // #8A3F22
+    static let espresso  = Color(red: 0.231, green: 0.196, blue: 0.165) // #3B322A
+    static let ink       = Color(red: 0.133, green: 0.122, blue: 0.106) // #221F1B
+
+    static let daily  = LinearGradient(colors: [clay, clayDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let hourly = LinearGradient(colors: [espresso, ink], startPoint: .topLeading, endPoint: .bottomTrailing)
+
+    static func serif(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
+        .system(size: size, weight: weight, design: .serif)
+    }
 }
 
 // Local copies of shared models (widget has no access to app target)
@@ -31,6 +71,59 @@ struct WHourlyWordSnapshot: Codable, Hashable {
     let validFrom: Date
 }
 
+// MARK: - Lock screen (accessory) layouts
+//
+// Lock-screen widgets are rendered monochrome/vibrant by the system, so we
+// drop the gradient and rely on type hierarchy + an accentable label.
+
+struct AccessoryRectView: View {
+    let label: String
+    let icon: String
+    let en: String?
+    let fr: String?
+    let level: String?
+
+    var body: some View {
+        if let en, let fr {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 4) {
+                    Image(systemName: icon).font(.caption2)
+                    Text("\(label)\(level.map { " · \($0)" } ?? "")")
+                        .font(.caption2.weight(.semibold))
+                }
+                .widgetAccentable()
+                Text(en)
+                    .font(.system(.headline, design: .serif))
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                Text(fr)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        } else {
+            VStack(alignment: .leading, spacing: 2) {
+                Label(label, systemImage: icon).font(.caption2.weight(.semibold)).widgetAccentable()
+                Text("Ouvre l'app").font(.caption2).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        }
+    }
+}
+
+struct AccessoryInlineView: View {
+    let prefix: String
+    let en: String?
+    let fr: String?
+    var body: some View {
+        if let en, let fr {
+            Text("\(prefix) \(en) — \(fr)")
+        } else {
+            Text("\(prefix) Vocabulary")
+        }
+    }
+}
+
 // MARK: - Daily Widget
 
 struct DailyProvider: TimelineProvider {
@@ -39,24 +132,54 @@ struct DailyProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (DailyEntry) -> Void) {
-        completion(DailyEntry(date: Date(), snapshot: loadSnapshot()))
+        let words = loadHourlyWords()
+        let current = words.last(where: { $0.validFrom <= Date() }) ?? words.first
+        completion(DailyEntry(date: Date(), snapshot: current.map(snapshot(from:)) ?? loadSnapshot()))
     }
 
+    // The word rotates every hour (shares the same hourly word list as the
+    // "Mot de l'heure" widget) so every widget changes throughout the day.
     func getTimeline(in context: Context, completion: @escaping (Timeline<DailyEntry>) -> Void) {
         let now = Date()
-        let entry = DailyEntry(date: now, snapshot: loadSnapshot())
+        let words = loadHourlyWords()
+
         let nextMidnight = Calendar.autoupdatingCurrent.nextDate(
             after: now,
             matching: DateComponents(hour: 0, minute: 0),
             matchingPolicy: .nextTime
         ) ?? Calendar.autoupdatingCurrent.date(byAdding: .day, value: 1, to: now)!
-        completion(Timeline(entries: [entry], policy: .after(nextMidnight)))
+
+        guard !words.isEmpty else {
+            let entry = DailyEntry(date: now, snapshot: loadSnapshot())
+            let later = Calendar.autoupdatingCurrent.date(byAdding: .hour, value: 1, to: now) ?? now
+            completion(Timeline(entries: [entry], policy: .after(later)))
+            return
+        }
+
+        var entries: [DailyEntry] = words
+            .filter { $0.validFrom >= now.addingTimeInterval(-3600) }
+            .map { DailyEntry(date: $0.validFrom, snapshot: snapshot(from: $0)) }
+
+        if entries.isEmpty, let last = words.last {
+            entries = [DailyEntry(date: now, snapshot: snapshot(from: last))]
+        }
+        completion(Timeline(entries: entries, policy: .after(nextMidnight)))
+    }
+
+    private func snapshot(from w: WHourlyWordSnapshot) -> WWidgetSnapshot {
+        WWidgetSnapshot(day: w.validFrom, wordId: w.wordId, en: w.en, fr: w.fr, level: w.level, state: .pending)
     }
 
     private func loadSnapshot() -> WWidgetSnapshot? {
         let defaults = UserDefaults(suiteName: WidgetConstants.appGroupId) ?? .standard
         guard let data = defaults.data(forKey: WidgetConstants.snapshotKey) else { return nil }
         return try? JSONDecoder().decode(WWidgetSnapshot.self, from: data)
+    }
+
+    private func loadHourlyWords() -> [WHourlyWordSnapshot] {
+        let defaults = UserDefaults(suiteName: WidgetConstants.appGroupId) ?? .standard
+        guard let data = defaults.data(forKey: WidgetConstants.hourlyWordsKey) else { return [] }
+        return (try? JSONDecoder().decode([WHourlyWordSnapshot].self, from: data)) ?? []
     }
 }
 
@@ -70,69 +193,72 @@ struct DailyWidgetView: View {
     @Environment(\.widgetFamily) var family
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color(red: 0.34, green: 0.34, blue: 0.84), Color(red: 0.58, green: 0.28, blue: 0.78)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            if let snap = entry.snapshot {
-                if family == .systemSmall {
-                    smallLayout(snap: snap)
+        switch family {
+        case .accessoryRectangular:
+            AccessoryRectView(label: "Mot du jour", icon: "text.book.closed.fill",
+                              en: entry.snapshot?.en, fr: entry.snapshot?.fr, level: entry.snapshot?.level)
+        case .accessoryInline:
+            AccessoryInlineView(prefix: "📖", en: entry.snapshot?.en, fr: entry.snapshot?.fr)
+        default:
+            ZStack {
+                WTheme.daily
+                if let snap = entry.snapshot {
+                    if family == .systemSmall { smallLayout(snap: snap) }
+                    else { mediumLayout(snap: snap) }
                 } else {
-                    mediumLayout(snap: snap)
+                    emptyLayout
                 }
-            } else {
-                emptyLayout
             }
         }
     }
 
     private func smallLayout(snap: WWidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Mot du jour")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.75))
                 Spacer()
                 Text(snap.level)
                     .font(.caption2.bold())
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(.white.opacity(0.2))
+                    .background(.white.opacity(0.22))
                     .foregroundStyle(.white)
                     .clipShape(Capsule())
             }
-            Spacer()
+            Spacer(minLength: 8)
             Text(snap.en)
-                .font(.title2.bold())
+                .font(WTheme.serif(28))
                 .foregroundStyle(.white)
                 .lineLimit(2)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.55)
+            Rectangle()
+                .fill(.white.opacity(0.30))
+                .frame(width: 26, height: 1.5)
+                .padding(.vertical, 6)
             Text(snap.fr)
                 .font(.callout)
-                .foregroundStyle(.white.opacity(0.8))
-                .lineLimit(1)
+                .foregroundStyle(.white.opacity(0.88))
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+            Spacer(minLength: 0)
         }
-        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .padding(16)
     }
 
     private func mediumLayout(snap: WWidgetSnapshot) -> some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Mot du jour")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.75))
+                Spacer(minLength: 0)
                 Text(snap.en)
-                    .font(.title.bold())
+                    .font(WTheme.serif(36))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.6)
                 Text(snap.fr)
-                    .font(.title3)
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(WTheme.serif(22, .medium))
+                    .foregroundStyle(.white.opacity(0.9))
                     .lineLimit(1)
+                Spacer(minLength: 0)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 6) {
@@ -144,10 +270,10 @@ struct DailyWidgetView: View {
                     .foregroundStyle(.white)
                     .clipShape(Capsule())
                 Spacer()
-                stateIcon(state: snap.state)
             }
         }
-        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .padding(18)
     }
 
     private var emptyLayout: some View {
@@ -165,22 +291,6 @@ struct DailyWidgetView: View {
         }
         .padding(14)
     }
-
-    @ViewBuilder
-    private func stateIcon(state: WDailyState) -> some View {
-        switch state {
-        case .learned:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .font(.title3)
-        case .seen:
-            Image(systemName: "eye.fill")
-                .foregroundStyle(.yellow)
-                .font(.title3)
-        case .pending:
-            EmptyView()
-        }
-    }
 }
 
 struct dailyVocabulary: Widget {
@@ -188,11 +298,12 @@ struct dailyVocabulary: Widget {
         StaticConfiguration(kind: WidgetConstants.dailyKind, provider: DailyProvider()) { entry in
             DailyWidgetView(entry: entry)
                 .widgetURL(URL(string: "vocabulary://home"))
-                .containerBackground(for: .widget) { Color.clear }
+                .widgetClearBackground()
         }
         .configurationDisplayName("Mot du jour")
-        .description("Affiche le mot du jour avec sa traduction.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .description("Un mot qui change chaque heure, selon ton niveau.")
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryInline])
+        .filledBlock()
     }
 }
 
@@ -270,80 +381,94 @@ struct HourlyWidgetView: View {
     }
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color(red: 0.10, green: 0.55, blue: 0.60), Color(red: 0.05, green: 0.38, blue: 0.50)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            if let snap = entry.snapshot {
-                if family == .systemSmall {
-                    smallLayout(snap: snap)
+        switch family {
+        case .accessoryRectangular:
+            AccessoryRectView(label: "Mot de \(hourLabel)", icon: "clock.fill",
+                              en: entry.snapshot?.en, fr: entry.snapshot?.fr, level: entry.snapshot?.level)
+        case .accessoryInline:
+            AccessoryInlineView(prefix: "⏰", en: entry.snapshot?.en, fr: entry.snapshot?.fr)
+        default:
+            ZStack {
+                WTheme.hourly
+                if let snap = entry.snapshot {
+                    if family == .systemSmall { smallLayout(snap: snap) }
+                    else { mediumLayout(snap: snap) }
                 } else {
-                    mediumLayout(snap: snap)
+                    emptyLayout
                 }
-            } else {
-                emptyLayout
             }
         }
     }
 
     private func smallLayout(snap: WHourlyWordSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Mot de \(hourLabel)")
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 4) {
+                Image(systemName: "clock.fill").font(.caption2).foregroundStyle(WTheme.clay)
+                Text(hourLabel)
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(.white.opacity(0.82))
                 Spacer()
                 Text(snap.level)
                     .font(.caption2.bold())
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(.white.opacity(0.2))
+                    .background(.white.opacity(0.22))
                     .foregroundStyle(.white)
                     .clipShape(Capsule())
             }
-            Spacer()
+            Spacer(minLength: 8)
             Text(snap.en)
-                .font(.title2.bold())
+                .font(WTheme.serif(26))
                 .foregroundStyle(.white)
                 .lineLimit(2)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.6)
+            Rectangle()
+                .fill(WTheme.clay.opacity(0.8))
+                .frame(width: 26, height: 1.5)
+                .padding(.vertical, 5)
             Text(snap.fr)
                 .font(.callout)
-                .foregroundStyle(.white.opacity(0.8))
-                .lineLimit(1)
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+            Spacer(minLength: 0)
         }
-        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .padding(16)
     }
 
     private func mediumLayout(snap: WHourlyWordSnapshot) -> some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
+                Spacer(minLength: 0)
                 Label("Mot de \(hourLabel)", systemImage: "clock.fill")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(WTheme.clay)
                 Text(snap.en)
-                    .font(.title.bold())
+                    .font(WTheme.serif(36))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.6)
                 Text(snap.fr)
-                    .font(.title3)
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(WTheme.serif(22, .medium))
+                    .foregroundStyle(.white.opacity(0.9))
                     .lineLimit(1)
+                Spacer(minLength: 0)
             }
             Spacer()
-            Text(snap.level)
-                .font(.caption.bold())
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.white.opacity(0.2))
-                .foregroundStyle(.white)
-                .clipShape(Capsule())
+            VStack {
+                Text(snap.level)
+                    .font(.caption.bold())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.white.opacity(0.2))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                Spacer()
+            }
         }
-        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .padding(18)
     }
 
     private var emptyLayout: some View {
@@ -368,24 +493,14 @@ struct hourlyVocabulary: Widget {
         StaticConfiguration(kind: WidgetConstants.hourlyKind, provider: HourlyProvider()) { entry in
             HourlyWidgetView(entry: entry)
                 .widgetURL(URL(string: "vocabulary://home"))
-                .containerBackground(for: .widget) { Color.clear }
+                .widgetClearBackground()
         }
         .configurationDisplayName("Mot de l'heure")
         .description("Un nouveau mot anglais toutes les heures, selon ton niveau.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryInline])
+        .filledBlock()
     }
 }
 
-// MARK: - Previews
-
-#Preview("Daily Small", as: .systemSmall) {
-    dailyVocabulary()
-} timeline: {
-    DailyEntry(date: .now, snapshot: WWidgetSnapshot(day: .now, wordId: 1, en: "hello", fr: "bonjour", level: "A1", state: .learned))
-}
-
-#Preview("Hourly Medium", as: .systemMedium) {
-    hourlyVocabulary()
-} timeline: {
-    HourlyEntry(date: .now, snapshot: WHourlyWordSnapshot(wordId: 2, en: "apple", fr: "pomme", level: "B1", validFrom: .now))
-}
+// Widget #Preview macros require iOS 17 — omitted so the extension can target
+// iOS 16. Use the Xcode canvas with a real timeline entry to preview if needed.

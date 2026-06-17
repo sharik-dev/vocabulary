@@ -1,0 +1,5 @@
+Première version de Vocabulaire Anglais :
+• Widgets écran d'accueil et écran verrouillé
+• Un mot anglais qui change chaque heure
+• Niveaux A1 à B2
+• Suivi de ta progression

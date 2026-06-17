@@ -105,4 +105,35 @@ platform :ios do
       skip_waiting_for_build_processing: true
     )
   end
+
+  desc "Upload des fiches FR (descriptions) + screenshots sur App Store Connect (sans binaire, sans soumettre)"
+  lane :metadata do
+    api_key = asc_api_key
+    deliver(
+      api_key: api_key,
+      app_identifier: APP_ID,
+      skip_binary_upload: true,
+      overwrite_screenshots: true,
+      metadata_path: "./fastlane/metadata",
+      screenshots_path: "./fastlane/screenshots",
+      languages: ["fr-FR"],
+      submit_for_review: false,
+      automatic_release: false,
+      run_precheck_before_submit: false,
+      force: true
+    )
+  end
+
+  desc "Génère les screenshots via snapshot — NÉCESSITE une cible UITest dans le projet"
+  lane :screenshots do
+    capture_screenshots(
+      project: PROJECT,
+      scheme: "vocabularyUITests",
+      devices: ["iPhone 17 Pro Max", "iPhone 17"],
+      languages: ["fr-FR"],
+      output_directory: "./fastlane/screenshots",
+      clear_previous_screenshots: true,
+      launch_arguments: ["-UITestMode YES"]
+    )
+  end
 end

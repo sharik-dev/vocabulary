@@ -16,6 +16,7 @@
 		A11111111111111111111111 /* AppConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22222222222222222222221 /* AppConstants.swift */; };
 		A11111111111111111111112 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22222222222222222222222 /* AppModels.swift */; };
 		A11111111111111111111113 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22222222222222222222223 /* SettingsStore.swift */; };
+		A11111111111111111111199 /* UITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22222222222222222222299 /* UITestSupport.swift */; };
 		A11111111111111111111114 /* SwiftDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22222222222222222222224 /* SwiftDataModels.swift */; };
 		A11111111111111111111115 /* Services.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22222222222222222222225 /* Services.swift */; };
 		A11111111111111111111116 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22222222222222222222226 /* RootView.swift */; };
@@ -59,6 +60,7 @@
 		A22222222222222222222221 /* AppConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConstants.swift; sourceTree = "<group>"; };
 		A22222222222222222222222 /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
 		A22222222222222222222223 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
+		A22222222222222222222299 /* UITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestSupport.swift; sourceTree = "<group>"; };
 		A22222222222222222222224 /* SwiftDataModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataModels.swift; sourceTree = "<group>"; };
 		A22222222222222222222225 /* Services.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services.swift; sourceTree = "<group>"; };
 		A22222222222222222222226 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -148,6 +150,7 @@
 				A22222222222222222222225 /* Services.swift */,
 				A22222222222222222222224 /* SwiftDataModels.swift */,
 				A22222222222222222222223 /* SettingsStore.swift */,
+				A22222222222222222222299 /* UITestSupport.swift */,
 				A22222222222222222222222 /* AppModels.swift */,
 				A22222222222222222222221 /* AppConstants.swift */,
 				A22222222222222222222227 /* Resources/words.json */,
@@ -268,6 +271,7 @@
 				A11111111111111111111115 /* Services.swift in Sources */,
 				A11111111111111111111114 /* SwiftDataModels.swift in Sources */,
 				A11111111111111111111113 /* SettingsStore.swift in Sources */,
+				A11111111111111111111199 /* UITestSupport.swift in Sources */,
 				A11111111111111111111112 /* AppModels.swift in Sources */,
 				A11111111111111111111111 /* AppConstants.swift in Sources */,
 				F05571B9BC6FC9B8BC747411 /* vocabularyApp.swift in Sources */,
@@ -315,6 +319,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vocabularyBySharik;
+				INFOPLIST_KEY_CFBundleDisplayName = Vocabulaire;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -368,7 +373,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -390,7 +395,7 @@
 				INFOPLIST_FILE = dailyVocabulary/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = dailyVocabulary;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -424,7 +429,7 @@
 				INFOPLIST_FILE = dailyVocabulary/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = dailyVocabulary;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -468,6 +473,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vocabularyBySharik;
+				INFOPLIST_KEY_CFBundleDisplayName = Vocabulaire;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -527,7 +533,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
