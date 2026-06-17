@@ -278,7 +278,7 @@ enum DailyWordService {
         let today = Date().startOfDay
         let cal = Calendar.autoupdatingCurrent
         let dayNumber = Int(today.timeIntervalSince1970 / 86400)
-        let seed = UInt64(bitPattern: Int64(dayNumber) &* 0x9E3779B97F4A7C15) ^ UInt64(level.sortOrder &* 17)
+        let seed = (UInt64(bitPattern: Int64(dayNumber)) &* 0x9E3779B97F4A7C15) ^ UInt64(level.sortOrder * 17)
         var rng = SeededGenerator(seed: seed)
         var shuffled = words
         shuffled.shuffle(using: &rng)
