@@ -39,6 +39,24 @@ Crée la fiche app sur App Store Connect (UNIQUE, via API key)
 
 Build et upload sur TestFlight
 
+### ios metadata
+
+```sh
+[bundle exec] fastlane ios metadata
+```
+
+Upload des fiches FR (descriptions) + screenshots sur App Store Connect (sans binaire, sans soumettre)
+
+Options : only_screenshots:true | only_metadata:true
+
+### ios screenshots
+
+```sh
+[bundle exec] fastlane ios screenshots
+```
+
+Génère les screenshots via snapshot — NÉCESSITE une cible UITest dans le projet
+
 ----
 
 This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.

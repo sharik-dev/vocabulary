@@ -44,3 +44,9 @@ fastlane/test_output
 # OS
 .DS_Store
 Thumbs.db
+
+# App Store screenshot generator (intermediate / heavy)
+marketing/node_modules/
+marketing/assets/
+fastlane/raw-iphone/
+fastlane/raw-ipad/
