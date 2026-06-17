@@ -34,6 +34,13 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 
+# Secrets — ne JAMAIS committer
+*.p8
+.env
+.env.*
+*.mobileprovision
+*.p12
+
 # OS
 .DS_Store
 Thumbs.db

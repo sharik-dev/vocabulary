@@ -1,0 +1,5 @@
+app_identifier("com.vocabularyBySharik")
+team_id("2XR666D9B2")
+
+# L'authentification se fait via App Store Connect API Key (voir Fastfile),
+# donc pas besoin d'apple_id / mot de passe ici.

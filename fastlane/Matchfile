@@ -1,0 +1,11 @@
+# Stockage chiffré des certificats + provisioning profiles dans un repo git privé.
+# MATCH_GIT_URL et MATCH_PASSWORD viennent des variables d'environnement (secrets CI).
+git_url(ENV["MATCH_GIT_URL"])
+storage_mode("git")
+
+type("appstore")
+
+app_identifier([
+  "com.vocabularyBySharik",
+  "com.vocabularyBySharik.dailyVocabulary"
+])

@@ -1,0 +1,96 @@
+default_platform(:ios)
+
+APP_ID  = "com.vocabularyBySharik"
+EXT_ID  = "com.vocabularyBySharik.dailyVocabulary"
+TEAM_ID = "2XR666D9B2"
+PROJECT = "vocabulary.xcodeproj"
+SCHEME  = "vocabulary"
+
+PROFILE_APP = "match AppStore #{APP_ID}"
+PROFILE_EXT = "match AppStore #{EXT_ID}"
+
+def asc_api_key
+  app_store_connect_api_key(
+    key_id: ENV["ASC_KEY_ID"],
+    issuer_id: ENV["ASC_ISSUER_ID"],
+    key_content: ENV["ASC_KEY_CONTENT"],
+    is_key_content_base64: true,
+    in_house: false
+  )
+end
+
+platform :ios do
+  desc "Bootstrap UNIQUE (sur Mac) : génère certifs + profils et les pousse dans le repo match"
+  lane :certificates do
+    match(
+      type: "appstore",
+      app_identifier: [APP_ID, EXT_ID],
+      api_key: asc_api_key,
+      readonly: false
+    )
+  end
+
+  desc "Build et upload sur TestFlight"
+  lane :beta do
+    # Sur CI : crée un keychain temporaire jetable pour la signature
+    setup_ci
+
+    api_key = asc_api_key
+
+    # Récupère (ou crée) certificats + provisioning profiles depuis le repo match.
+    # readonly sur CI : la CI ne crée jamais de certifs, elle les consomme.
+    match(
+      type: "appstore",
+      app_identifier: [APP_ID, EXT_ID],
+      api_key: api_key,
+      readonly: is_ci
+    )
+
+    # Numéro de build = dernier build TestFlight + 1 (unique à chaque upload)
+    latest = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: APP_ID,
+      initial_build_number: 0
+    )
+    increment_build_number(
+      build_number: latest + 1,
+      xcodeproj: PROJECT
+    )
+
+    # Bascule la signature en manuel au moment du build (le projet committé reste en Automatic pour Xcode local)
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: PROJECT,
+      team_id: TEAM_ID,
+      targets: ["vocabulary"],
+      bundle_identifier: APP_ID,
+      code_sign_identity: "Apple Distribution",
+      profile_name: PROFILE_APP
+    )
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: PROJECT,
+      team_id: TEAM_ID,
+      targets: ["dailyVocabularyExtension"],
+      bundle_identifier: EXT_ID,
+      code_sign_identity: "Apple Distribution",
+      profile_name: PROFILE_EXT
+    )
+
+    build_app(
+      scheme: SCHEME,
+      export_method: "app-store",
+      export_options: {
+        provisioningProfiles: {
+          APP_ID => PROFILE_APP,
+          EXT_ID => PROFILE_EXT
+        }
+      }
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true
+    )
+  end
+end
