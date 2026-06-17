@@ -30,6 +30,18 @@ platform :ios do
     )
   end
 
+  desc "Crée la fiche app sur App Store Connect (UNIQUE, via API key)"
+  lane :create_app do
+    asc_api_key # configure le token spaceship globalement
+    create_app_online(
+      app_identifier: APP_ID,
+      app_name: ENV["ASC_APP_NAME"] || "Daily Vocabulary",
+      sku: ENV["ASC_APP_SKU"] || "vocabularyBySharik",
+      language: "English (U.S.)",
+      enable_services: {}
+    )
+  end
+
   desc "Build et upload sur TestFlight"
   lane :beta do
     # Sur CI : crée un keychain temporaire jetable pour la signature
