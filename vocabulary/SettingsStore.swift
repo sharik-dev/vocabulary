@@ -60,14 +60,14 @@ final class SettingsStore: ObservableObject {
         Binding<Date>(
             get: {
                 var components = DateComponents()
-                components.hour = notificationHour
-                components.minute = notificationMinute
+                components.hour = self.notificationHour
+                components.minute = self.notificationMinute
                 return Calendar.autoupdatingCurrent.date(from: components) ?? Date()
             },
             set: { newValue in
                 let comps = Calendar.autoupdatingCurrent.dateComponents([.hour, .minute], from: newValue)
-                notificationHour = comps.hour ?? 9
-                notificationMinute = comps.minute ?? 0
+                self.notificationHour = comps.hour ?? 9
+                self.notificationMinute = comps.minute ?? 0
             }
         )
     }

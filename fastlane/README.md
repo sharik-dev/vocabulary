@@ -23,6 +23,14 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 Bootstrap UNIQUE (sur Mac) : génère certifs + profils et les pousse dans le repo match
 
+### ios create_app
+
+```sh
+[bundle exec] fastlane ios create_app
+```
+
+Crée la fiche app sur App Store Connect (UNIQUE, via API key)
+
 ### ios beta
 
 ```sh

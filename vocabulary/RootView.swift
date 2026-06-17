@@ -243,10 +243,11 @@ private struct HomeView: View {
 
     private func fetchEntry(day: Date, level: CEFRLevel) -> DailyEntryModel? {
         let targetDay = day.startOfDay
-        let descriptor = FetchDescriptor<DailyEntryModel>(
-            predicate: #Predicate { $0.day == targetDay && $0.levelRaw == level.rawValue },
-            fetchLimit: 1
+        let levelRaw = level.rawValue
+        var descriptor = FetchDescriptor<DailyEntryModel>(
+            predicate: #Predicate { $0.day == targetDay && $0.levelRaw == levelRaw }
         )
+        descriptor.fetchLimit = 1
         return try? context.fetch(descriptor).first
     }
 }

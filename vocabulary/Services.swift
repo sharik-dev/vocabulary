@@ -75,6 +75,7 @@ struct SeededGenerator: RandomNumberGenerator {
     }
 }
 
+@MainActor
 enum DailyWordService {
     static func syncUpToToday(level: CEFRLevel, wordStore: WordStore, settings: SettingsStore, context: ModelContext) {
         let today = Date().startOfDay
@@ -172,33 +173,37 @@ enum DailyWordService {
 
     private static func fetchEntry(day: Date, level: CEFRLevel, context: ModelContext) -> DailyEntryModel? {
         let d = day.startOfDay
-        let descriptor = FetchDescriptor<DailyEntryModel>(
-            predicate: #Predicate { $0.day == d && $0.levelRaw == level.rawValue },
-            sortBy: [SortDescriptor(\.day, order: .reverse)],
-            fetchLimit: 1
+        let levelRaw = level.rawValue
+        var descriptor = FetchDescriptor<DailyEntryModel>(
+            predicate: #Predicate { $0.day == d && $0.levelRaw == levelRaw },
+            sortBy: [SortDescriptor(\.day, order: .reverse)]
         )
+        descriptor.fetchLimit = 1
         return try? context.fetch(descriptor).first
     }
 
     private static func fetchEntries(level: CEFRLevel, context: ModelContext) -> [DailyEntryModel] {
+        let levelRaw = level.rawValue
         let descriptor = FetchDescriptor<DailyEntryModel>(
-            predicate: #Predicate { $0.levelRaw == level.rawValue }
+            predicate: #Predicate { $0.levelRaw == levelRaw }
         )
         return (try? context.fetch(descriptor)) ?? []
     }
 
     private static func fetchLastEntry(level: CEFRLevel, context: ModelContext) -> DailyEntryModel? {
-        let descriptor = FetchDescriptor<DailyEntryModel>(
-            predicate: #Predicate { $0.levelRaw == level.rawValue },
-            sortBy: [SortDescriptor(\.day, order: .reverse)],
-            fetchLimit: 1
+        let levelRaw = level.rawValue
+        var descriptor = FetchDescriptor<DailyEntryModel>(
+            predicate: #Predicate { $0.levelRaw == levelRaw },
+            sortBy: [SortDescriptor(\.day, order: .reverse)]
         )
+        descriptor.fetchLimit = 1
         return try? context.fetch(descriptor).first
     }
 
     private static func fetchWordProgress(level: CEFRLevel, context: ModelContext) -> [WordProgressModel] {
+        let levelRaw = level.rawValue
         let descriptor = FetchDescriptor<WordProgressModel>(
-            predicate: #Predicate { $0.levelRaw == level.rawValue }
+            predicate: #Predicate { $0.levelRaw == levelRaw }
         )
         return (try? context.fetch(descriptor)) ?? []
     }
@@ -236,10 +241,11 @@ enum DailyWordService {
     }
 
     private static func upsertProgress(wordId: Int, level: CEFRLevel, newState: WordState, context: ModelContext) {
-        let descriptor = FetchDescriptor<WordProgressModel>(
-            predicate: #Predicate { $0.wordId == wordId },
-            fetchLimit: 1
+        let targetWordId = wordId
+        var descriptor = FetchDescriptor<WordProgressModel>(
+            predicate: #Predicate { $0.wordId == targetWordId }
         )
+        descriptor.fetchLimit = 1
         let existing = try? context.fetch(descriptor).first
 
         if let existing {
@@ -290,6 +296,7 @@ enum DailyWordService {
     }
 }
 
+@MainActor
 enum ProgressService {
     struct Stats: Hashable {
         let learned: Int
